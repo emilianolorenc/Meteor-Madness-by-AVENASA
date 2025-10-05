@@ -11,7 +11,7 @@ html,body{height:100%;margin:0;background:radial-gradient(circle at 50% 30%,#0e1
 .app{display:grid;grid-template-columns:1fr 380px;gap:14px;height:100%;padding:14px}
 .space{position:relative;height:100%;border:1px solid #1a2446;border-radius:14px;overflow:hidden;background:radial-gradient(1000px 700px at 40% -20%,#1a264d 0%,#0b132b 60%,#060b19 100%);box-shadow:0 10px 30px rgba(0,0,0,.35)}
 #sky{position:absolute;inset:0;width:100%;height:100%}
-#earthImg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:clamp(120px,26vw,180px);height:clamp(120px,26vw,180px);border-radius:50%;object-fit:cover;box-shadow:0 20px 30px #0007;z-index:2;visibility:hidden}
+#earthImg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:clamp(120px,26vw,180px);height:clamp(120px,26vw,180px);border-radius:50%;object-fit:cover;box-shadow:0 20px 30px #0007;z-index:2}
 .deflect{position:absolute;left:14px;bottom:12px;padding:12px 14px;border-radius:12px;border:1px solid #233057;background:#0f1a3a;color:#cfe7ff;text-decoration:none;z-index:5}
 .banner{position:absolute;left:50%;top:10px;transform:translateX(-50%);padding:10px 18px;border-radius:999px;font-weight:800;letter-spacing:.5px;border:1px solid #1a2446;box-shadow:0 10px 30px rgba(0,0,0,.35);display:none;z-index:6}
 .banner.mild{background:#0f1a3a;color:var(--ok)}
@@ -39,6 +39,9 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .links a{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;border-radius:10px;border:1px solid #233057;background:#0f1a3a;color:#cfe7ff;text-decoration:none}
 .helpFab{position:fixed;top:12px;right:12px;z-index:9999;width:40px;height:40px;border-radius:999px;border:1px solid #233057;background:#0f1a3a;color:#cfe7ff;font-weight:800;font-size:18px;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.55);transition:transform .12s ease}
 .helpFab:hover{transform:translateY(-1px)}
+#welcome .media{margin:10px 0 14px 0;border-radius:14px;overflow:hidden;background:linear-gradient(180deg,#0d1836,#0a1330);border:1px solid #2a3f8a55;box-shadow:0 10px 28px rgba(0,0,0,.4)}
+#welcome .media img{display:block;width:100%;height:auto;max-height:52vh;object-fit:cover}
+#welcome .caption{font-size:12px;color:#a9c1ff;margin-top:6px}
 @media (max-width:980px){.app{grid-template-columns:1fr}.panel{order:-1;height:50vh}.space{min-height:50vh}}
 @media (max-width:600px){.panel h1{font-size:16px}.small{font-size:12px}.row{flex-wrap:wrap;gap:6px}.row button,.row select{min-height:44px;font-size:15px}.deflect{left:50%;transform:translateX(-50%);bottom:10px;width:92vw;max-width:520px;text-align:center}.helpFab{top:10px;right:10px;width:44px;height:44px;font-size:18px}}
 </style>
@@ -122,28 +125,35 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
 <dialog id="welcome">
   <h2 style="margin:0 0 6px 0">Meteor Madness — Avenasa Team</h2>
-
+  <figure class="media">
+    <img src="avenasa.jpg" alt="Avenasa Team — NASA Space Apps Challenge">
+  </figure>
   <p>Welcome to Meteor Madness, an interactive experience developed by the Avenasa Team for the NASA Space Apps Challenge.</p>
   <p>This simulator lets you explore real near-Earth meteorites and see how close they travel to our planet. Each one moves through space around Earth, displaying its distance, velocity, and potential risk level.</p>
   <p>By selecting a meteor, you can discover its size, composition, and orbital details. For those who want to go further, a direct link connects you to the official NASA database with more scientific information.</p>
   <p>You can also create your own meteorite and adjust its properties such as mass, speed, and impact angle. Then, visualize the possible effects it would have if it struck Earth. It’s an interactive way to understand how physics shapes the outcomes of cosmic collisions.</p>
-  <p>The Avenasa Team built this simulator to inspire curiosity about near-Earth objects and planetary defense. Our goal is to make space science accessible, visual, and engaging for everyone showing how observation, data, and imagination can help us understand the universe around us.</p>
-
+  <p>The Avenasa Team built this simulator to inspire curiosity about near-Earth objects and planetary defense. Our goal is to make space science accessible, visual, and engaging for everyone — showing how observation, data, and imagination can help us understand the universe around us.</p>
   <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
     <button id="wClose">Start</button>
   </div>
 </dialog>
 
-
 <script>
 const $ = id => document.getElementById(id);
 const canvas = $('sky'), ctx = canvas.getContext('2d',{alpha:false});
 const earthImg = $('earthImg');
-earthImg.addEventListener('load',()=>earthImg.style.visibility='visible');
-earthImg.addEventListener('error',()=>earthImg.remove());
+const earthDefault = 'earth.png';
+const earthDestroyedSrc = 'earthdestroy.png';
+let earthState = 'default';
+
+function safeShowImg(){ earthImg.style.display='block'; earthImg.style.visibility='visible' }
+function safeHideImg(){ earthImg.style.display='none' }
+
+earthImg.addEventListener('load',safeShowImg);
+earthImg.addEventListener('error',()=>{ safeHideImg(); earthState='default' });
 
 let W=0,H=0,CX=0,CY=0, uiZoom=1, placing=false, lastMap={x:0,y:0}, selected=null;
-const EARTH_R_BASE=90, MOON_R=18; let EARTH_R=90, WORLD_R=360;
+const MOON_R=18; let EARTH_R=90, WORLD_R=360;
 
 const TYPES={rocky:{density:3000,color:'#67c1ff',label:'Rocky'}, metallic:{density:7800,color:'#c38bff',label:'Metallic'}};
 
@@ -169,9 +179,10 @@ const MORE_NEO=[
 ];
 
 const meteors=[], stars=[];
-const meteorPNG=new Image(), impactPNG=new Image(), moonImg=new Image();
-meteorPNG.onload=()=>draw(); meteorPNG.src='meteoro.png';
+const meteorPNG=new Image(), impactPNG=new Image(), moonImg=new Image(), earthDestroyedImg=new Image();
+meteorPNG.src='meteoro.png';
 impactPNG.src='meteoro_impact.png';
+earthDestroyedImg.src=earthDestroyedSrc;
 (function loadMoon(i=0){const c=['moon.png','moon.jpg','moon.webp','moon.gif']; if(i>=c.length)return; moonImg.onload=()=>draw(); moonImg.onerror=()=>loadMoon(i+1); moonImg.src=c[i];})();
 
 function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
@@ -215,9 +226,10 @@ function resize(){
   const rect=canvas.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
   canvas.width=Math.floor(rect.width*dpr); canvas.height=Math.floor(rect.height*dpr);
   canvas.style.width=rect.width+'px'; canvas.style.height=rect.height+'px';
+  const minSide=Math.min(canvas.width,canvas.height);
   W=canvas.width; H=canvas.height; CX=W/2; CY=H/2;
-  EARTH_R=Math.max(60,Math.min(110,Math.min(W,H)*0.09));
-  WORLD_R=Math.min(W,H)/2-40;
+  EARTH_R=Math.max(60,Math.min(110,minSide*0.09));
+  WORLD_R=minSide/2-40;
   stars.length=0; const n=Math.round((W*H)/(window.innerWidth<640?14000:9000));
   for(let i=0;i<n;i++) stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.2+0.2,tw:Math.random()*6,spd:Math.random()*0.25+0.05});
   draw()
@@ -246,6 +258,7 @@ function drawMoon(ts){
 }
 
 function drawEarth(){
+  if(earthState!=='default') return;
   const g=ctx.createRadialGradient(CX-30,CY-30,10,CX,CY,EARTH_R);
   g.addColorStop(0,'#6ecbff'); g.addColorStop(0.6,'#1ea0ff'); g.addColorStop(1,'#0b2d6b');
   ctx.save(); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(CX,CY,EARTH_R,0,Math.PI*2); ctx.fill();
@@ -295,7 +308,13 @@ canvas.addEventListener('touchend',e=>{const t=e.changedTouches[0]; if(!t) retur
 
 $('zoomIn').onclick=()=>{uiZoom=clamp(uiZoom*1.2,0.6,1.8); draw()};
 $('zoomOut').onclick=()=>{uiZoom=clamp(uiZoom/1.2,0.6,1.8); draw()};
-$('resetView').onclick=()=>{uiZoom=1; draw()};
+$('resetView').onclick=()=>{
+  uiZoom=1;
+  earthState='default';
+  earthImg.src=earthDefault;
+  safeShowImg();
+  draw();
+};
 $('pick').addEventListener('change',e=>{selectIndex(+e.target.value)});
 
 $('newOne').onclick=()=>{placing=true};
@@ -351,21 +370,25 @@ $('simulate').onclick=()=>{
     else if(meteorPNG.complete&&meteorPNG.width){const s=Math.max(rad*2.2,26); ctx.drawImage(meteorPNG,x-s/2,y-s/2,s,s)}
     else {ctx.fillStyle=TYPES[selected.type].color; ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2); ctx.fill()}
     ctx.globalAlpha=.25; ctx.strokeStyle=TYPES[selected.type].color; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(start.x,start.y); ctx.stroke(); ctx.restore();
-    if(p>=1 && !hit){hit=true; banner.style.display='block'; setTimeout(()=>banner.style.display='none',2800); flash=1; shock=10}
+    if(p>=1 && !hit){
+      hit=true; banner.style.display='block'; setTimeout(()=>banner.style.display='none',2800); flash=1; shock=10;
+      if(data.key==='critical' && earthDestroyedImg.complete){ earthState='destroyed'; earthImg.src=earthDestroyedSrc; }
+    }
     if(hit){
       if(flash>0){ctx.save(); ctx.globalAlpha=flash*0.6; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(CX,CY,EARTH_R+8,0,Math.PI*2); ctx.fill(); ctx.restore(); flash*=0.85}
       ctx.save(); ctx.globalAlpha=.35; ctx.strokeStyle=({'mild':'#8bc34a','moderate':'#cddc39','high':'#ff9800','severe':'#ff7043','extreme':'#ff5252','critical':'#ff1744'})[data.key]; ctx.lineWidth=3;
       ctx.beginPath(); ctx.arc(CX,CY,EARTH_R+shock,0,Math.PI*2); ctx.stroke(); ctx.restore(); shock+=8; if(shock>WORLD_R*uiZoom) shock=WORLD_R*uiZoom
     }
     if(!hit || flash>0 || shock<WORLD_R*uiZoom) requestAnimationFrame(step);
-    else {const F=new Intl.NumberFormat('en-US',{maximumFractionDigits:2}); const p2=orbitPoint(); selected.rx=p2.rx; selected.ry=p2.ry; updateInfo(); draw()}
+    else {const p2=orbitPoint(); selected.rx=p2.rx; selected.ry=p2.ry; updateInfo(); draw()}
   }
   requestAnimationFrame(step)
 };
 
 function showWelcome(){
-  const d=$('welcome'); const b=$('wClose');
-  if(b) b.onclick=()=>d.close();
+  const d = $('welcome');
+  const btn = $('wClose');
+  if(btn) btn.onclick = () => d.close();
   if(!d.open) d.showModal();
 }
 $('helpBtn').addEventListener('click', showWelcome);
