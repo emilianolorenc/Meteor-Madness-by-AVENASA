@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Earth Defender — Orbital Physics (Slingshot Final)</title>
+<style>
+  :root{--bg:#070b16;--fg:#eaf2ff;--muted:#9fb3d1;--accent:#5ee3ff;--card:#0f1830;--stroke:#2d437a}
+  html,body{height:100%;margin:0;background:radial-gradient(1200px 800px at 50% 50%,#0a1230 0%,var(--bg) 60%)}
+  canvas{display:block;width:100vw;height:100vh;touch-action:none}
+  #hud{position:fixed;inset:10px auto auto 10px;color:var(--fg);font:clamp(12px,1.6vw,14px)/1.25 system-ui,Arial;user-select:none;display:flex;flex-direction:column;gap:8px;z-index:5}
+  #hud .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .chip{background:var(--card);border:1px solid var(--stroke);padding:.5em .7em;border-radius:10px;color:var(--fg)}
+  .btn{background:var(--card);border:1px solid #3658b0;color:var(--fg);padding:.55em .75em;border-radius:10px;cursor:pointer}
+  .btn.active{outline:2px solid var(--accent)}
+  #log{position:fixed;right:10px;top:10px;max-width:min(90vw,360px);max-height:40vh;overflow:auto;color:#cfe3ff;background:#0b142f80;border:1px solid #234;padding:8px;border-radius:10px;font:12px monospace;z-index:5}
+  #help{position:fixed;left:10px;bottom:10px;color:#b8c8ea;background:#0b142f80;border:1px solid #234;padding:8px;border-radius:10px;font:12px/1.35 system-ui;z-index:5;max-width:92vw}
+  #intro{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:10;background:rgba(4,8,20,0.88);color:#eaf2ff;padding:20px}
+  #intro .panel{width:min(920px,92vw);max-height:88vh;overflow:auto;background:#0c1430;border:1px solid #2a3f73;border-radius:14px;padding:18px 20px;box-shadow:0 10px 40px #0008}
+  #intro h1{margin:6px 0 10px;font:600 clamp(18px,2.5vw,22px)/1.2 system-ui}
+  #intro h2{margin:14px 0 8px;font:600 clamp(14px,2.2vw,16px)/1.2 system-ui;color:#a6c8ff}
+  #intro p,#intro li{color:#cfe3ff;font:clamp(12px,1.8vw,14px)/1.5 system-ui;margin:6px 0}
+  #intro ul{padding-left:18px}
+  #intro .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  #intro .k{color:#ffe066}.n{color:#ff7b7b}.t{color:#7cffb8}.metal{color:#b3b7c1}.rock{color:#9aa3ad}
+  #intro .bar{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:14px}
+  #intro .bar .btn{padding:.7em 1em}
+  .floating-back{position:fixed;right:16px;bottom:16px;z-index:999;text-decoration:none;background:var(--card);border:1px solid #3a5ab6;color:var(--fg);padding:.75em 1em;border-radius:12px}
+  @media (max-width: 720px){
+    #hud{inset:auto 8px 8px 8px;align-items:center}
+    #hud .row{justify-content:center}
+    #help{display:none}
+    #log{display:none}
+    #intro .grid{grid-template-columns:1fr}
+    .btn{padding:.75em 1em}
+    .chip{padding:.6em .8em}
+  }
+  @media (pointer:coarse){.btn{padding:.9em 1.05em}}
+</style>
+</head>
+<body>
+<a class="floating-back" href="./index.html">← Back to simulator</a>
+<canvas id="game"></canvas>
+
+<div id="intro" role="dialog" aria-modal="true">
+  <div class="panel">
+    <h1>Earth Defender — Orbital Physics</h1>
+    <p>Prevent impacts on Earth using three tools while the Moon orbits and exerts gravity. Motion is scaled for stability and playability.</p>
+    <div class="grid">
+      <div>
+        <h2>Tools</h2>
+        <ul>
+          <li><b class="k">1) Kinetic impact</b>: sling a satellite; momentum exchange alters the asteroid path.</li>
+          <li><b class="n">2) Nuclear charge</b>: strong impulse on contact. Rocky targets split into two (½ size, 2× speed).</li>
+          <li><b class="t">3) Gravity tractor</b>: pulls <span class="metal">metallic</span> targets only.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Asteroid types</h2>
+        <ul>
+          <li><span class="rock">Rocky</span>: Apophis, Bennu, Eros, Apollo, Icarus, Toutatis, Phaethon, Aten, Itokawa, Geographos, Golevka, YORP, Ryugu, Adonis.</li>
+          <li><span class="metal">Metallic</span>: <b>Ganymed</b>, <b>Florence</b>.</li>
+        </ul>
+        <h2>Controls</h2>
+        <ul>
+          <li>Press near Earth, drag to stretch, release to launch. More stretch = faster shot.</li>
+          <li>Hotkeys: [1] Kinetic, [2] Nuclear, [3] Tractor, [P] Pause, [M] Educational.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="bar">
+      <span>Pick a tool and sling from Earth.</span>
+      <div>
+        <button class="btn" id="intro-edu">Start in educational mode</button>
+        <button class="btn active" id="intro-start">Start</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="hud">
+  <div class="row">
+    <span class="chip">Time <b id="time">03:00</b></span>
+    <span class="chip">Score <b id="score">0</b></span>
+    <span class="chip">Earth HP <b id="hp">100</b></span>
+    <span class="chip">Moon <b id="phase">—</b></span>
+  </div>
+  <div class="row" id="weapons">
+    <button class="btn active" data-weapon="kinetic">1) Kinetic</button>
+    <button class="btn" data-weapon="nuclear">2) Nuclear</button>
+    <button class="btn" data-weapon="tractor">3) Tractor</button>
+    <button class="btn" id="pause">Pause</button>
+    <button class="btn" id="edu">Educational</button>
+    <button class="btn" id="reset">Reset</button>
+  </div>
+  <div class="row">
+    <span class="chip">Ammo — 🛰 <b>∞</b> · ☢ <b id="ammoN">5</b> · 🧲 <b id="ammoT">5</b></span>
+  </div>
+</div>
+
+<div id="log"></div>
+<div id="help">
+  Drag from Earth to stretch the slingshot; release to fire. Tractor affects metallic targets only.
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const C=$('game'),X=C.getContext('2d');
+let DPR=window.devicePixelRatio||1;
+function fit(){DPR=window.devicePixelRatio||1;C.width=innerWidth*DPR;C.height=innerHeight*DPR;C.style.width=innerWidth+'px';C.style.height=innerHeight+'px';X.setTransform(DPR,0,0,DPR,0,0)}
+addEventListener('resize',fit,{passive:true});fit();
+
+const HUD={time:$('time'),score:$('score'),hp:$('hp'),ammoN:$('ammoN'),ammoT:$('ammoT'),phase:$('phase'),log:$('log')};
+const UI={bar:$('weapons'),pause:$('pause'),edu:$('edu'),reset:$('reset'),intro:$('intro'),start:$('intro-start'),startEdu:$('intro-edu')};
+
+const IMG_E=new Image();IMG_E.src='earth.png';
+const IMG_M=new Image();IMG_M.src='moon.png';
+const IMG_A=new Image();IMG_A.src='meteoro.png';
+
+let SCALE=1,EARTH_R=46,MOON_R=14,MOON_ORBIT_R=260,G_EARTH=1200,G_MOON=15,MOON_PERIOD_S=12,SPEED_SCALE=0.045,HP_MAX=100;
+let MAX_STRETCH=260,SLING_DEAD_FRAC=0.08,V_MIN=18,V_MAX=64; // tuned speeds
+function rescale(){
+  const s=Math.min(innerWidth,innerHeight);
+  SCALE=s/900;
+  EARTH_R=Math.max(28,46*SCALE);
+  MOON_R=Math.max(10,14*SCALE);
+  MOON_ORBIT_R=Math.max(160,260*SCALE);
+  MAX_STRETCH=Math.max(180,280*SCALE);
+  SLING_DEAD_FRAC=0.08;
+  V_MIN=25+10*SCALE;      // minimum after dead-zone
+  V_MAX=200+18*SCALE;      // maximum launch speed
+  G_EARTH=1200*Math.max(.8,SCALE);
+  G_MOON=15*Math.max(.8,SCALE);
+  SPEED_SCALE=0.045*Math.max(.9,Math.min(1.25,SCALE*1.15));
+}
+rescale();addEventListener('resize',rescale,{passive:true});
+
+const state={t:180,score:0,hp:HP_MAX,paused:true,edu:false,weapon:'kinetic',ammo:{nuclear:5,tractor:3},shots:[],rocks:[],moonA:0,moonP:0};
+const ROCKS=[["99942 Apophis","rocky",370,23],["101955 Bennu","rocky",490,19],["433 Eros","rocky",1600,24],["1862 Apollo","rocky",1500,20],["1566 Icarus","rocky",1400,26],["4179 Toutatis","rocky",2700,22],["3200 Phaethon","rocky",5100,22],["1036 Ganymed","metallic",32000,26],["2062 Aten","rocky",1100,28],["25143 Itokawa","rocky",330,20],["3122 Florence","metallic",4900,22],["1620 Geographos","rocky",2500,24],["6489 Golevka","rocky",530,18],["54509 YORP","rocky",110,18],["162173 Ryugu","rocky",900,27],["2101 Adonis","rocky",500,25]];
+const R=(a,b)=>a+Math.random()*(b-a),CL=(v,a,b)=>Math.max(a,Math.min(b,v));
+function log(t){const el=HUD.log;const p=document.createElement('div');p.textContent=t;el.prepend(p);const k=[...el.children];if(k.length>80)el.removeChild(k[k.length-1])}
+const ex=()=>innerWidth/2,ey=()=>innerHeight/2;
+
+function spawn(){
+  state.rocks.length=0;
+  const rmin=MOON_ORBIT_R*.7,rmax=MOON_ORBIT_R*1.9;
+  for(const [n,m,d,s] of ROCKS){
+    const r=R(rmin,rmax),a=R(0,Math.PI*2),x=ex()+Math.cos(a)*r,y=ey()+Math.sin(a)*r,v=SPEED_SCALE*s,vx=-Math.sin(a)*v,vy=Math.cos(a)*v,mass=Math.max(.4,Math.pow(d/1000,1.2));
+    state.rocks.push({id:crypto.randomUUID(),name:n,mat:m,d:d,rpx:CL(d/400,3*SCALE,22*SCALE),x,y,vx,vy,m:mass,live:true});
+  }
+}
+
+function aEarth(o){const dx=ex()-o.x,dy=ey()-o.y,r2=dx*dx+dy*dy+1e-4,r=Math.sqrt(r2),a=G_EARTH/r2;return{ax:a*dx/r,ay:a*dy/r}}
+function mPos(){const a=state.moonA;return{x:ex()+Math.cos(a)*MOON_ORBIT_R,y:ey()+Math.sin(a)*MOON_ORBIT_R}}
+function aMoon(o,mx,my){const dx=mx-o.x,dy=my-o.y,r2=dx*dx+dy*dy+1e-4,r=Math.sqrt(r2),a=G_MOON/r2;return{ax:a*dx/r,ay:a*dy/r}}
+function step(o,ax,ay){o.vx+=ax/60;o.vy+=ay/60;o.x+=o.vx/60;o.y+=o.vy/60}
+
+function easeOutCubic(t){return 1-Math.pow(1-t,3)}
+function effectiveStretch(stretch){const f=stretch/MAX_STRETCH;return CL((f-SLING_DEAD_FRAC)/(1-SLING_DEAD_FRAC),0,1)}
+
+function fire(type,angle,eff){
+  if(type==='nuclear'&&state.ammo.nuclear<=0){log('No nuclear ammo');return}
+  if(type==='tractor'&&state.ammo.tractor<=0){log('No tractor devices');return}
+
+  const offset=EARTH_R+28*SCALE; // spawn from pocket on the rim
+  const sx=ex()-Math.cos(angle)*offset;
+  const sy=ey()-Math.sin(angle)*offset;
+
+  const speed=V_MIN + (V_MAX - V_MIN) * easeOutCubic(eff);
+  const vx=-Math.cos(angle)*speed, vy=-Math.sin(angle)*speed;
+
+  const p={id:crypto.randomUUID(),type,x:sx,y:sy,vx,vy,r:type==='nuclear'?5*SCALE:4*SCALE,m:type==='kinetic'?1.4:(type==='nuclear'?1.0:0.8),life:type==='tractor'?18:12,live:true,attach:null,gElapsed:0,gDur:0.35};
+  state.shots.push(p);
+  if(type==='nuclear'){state.ammo.nuclear--;HUD.ammoN.textContent=state.ammo.nuclear}
+  if(type==='tractor'){state.ammo.tractor--;HUD.ammoT.textContent=state.ammo.tractor}
+}
+
+function hitEarth(b){if(!b.live)return;b.live=false;state.hp=Math.max(0,state.hp-Math.ceil(b.d/600));HUD.hp.textContent=state.hp;log(`Impact on Earth: ${b.name}`);if(state.hp<=0)end(false)}
+function hitK(p,b){const M=b.m+p.m;b.vx=(b.m*b.vx+p.m*p.vx)/M;b.vy=(b.m*b.vy+p.m*p.vy)/M;p.live=false;state.score+=5;HUD.score.textContent=state.score;log(`Kinetic deflection on ${b.name}`)}
+function splitRock(b,nx,ny){const nd=b.d/2;if(nd<80){state.score+=8;HUD.score.textContent=state.score;return}const sp=Math.hypot(b.vx,b.vy)*2,ang=Math.atan2(ny,nx),spread=.38,a1=ang+spread,a2=ang-spread;const add=a=>state.rocks.push({id:crypto.randomUUID(),name:b.name+' (frag)',mat:'rocky',d:nd,rpx:CL(nd/400,3*SCALE,22*SCALE),x:b.x+Math.cos(a)*b.rpx*1.2,y:b.y+Math.sin(a)*b.rpx*1.2,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,m:Math.max(.3,Math.pow(nd/1000,1.2)),live:true});add(a1);add(a2)}
+function hitN(p,b){const dx=b.x-p.x,dy=b.y-p.y,r=Math.hypot(dx,dy)||1,nx=dx/r,ny=dy/r,imp=12/Math.max(.6,r/18);b.vx+=nx*imp;b.vy+=ny*imp;if(b.mat==='rocky'){splitRock(b,nx,ny);b.live=false;state.score+=12;log(`Rocky fragmentation: ${b.name}`)}else{state.score+=10;log(`Nuclear impulse on metallic: ${b.name}`)}HUD.score.textContent=state.score;p.live=false}
+const TRACTOR={k:420,near:1.8,attach:28*SCALE,reach:160*SCALE};
+function pullTractor(p,b){if(b.mat!=='metallic')return;const dx=p.x-b.x,dy=p.y-b.y,r=Math.hypot(dx,dy)||1;if(r>TRACTOR.reach)return;const k=TRACTOR.k*(r<40?TRACTOR.near:1),inv=1/Math.pow(r,1.6),ax=dx*k*inv,ay=dy*k*inv;b.vx+=ax/60;b.vy+=ay/60;p.vx-=ax/60*.35;p.vy-=ay/60*.35;if(!p.attach&&r<TRACTOR.attach){p.attach=b.id;log(`Tractor latched: ${b.name}`)}if(p.attach===b.id){const target=22*SCALE,pull=r-target,ux=dx/r,uy=dy/r;p.vx-=ux*pull*1.1/60;p.vy-=uy*pull*1.1/60;b.vx+=ux*pull*1.3/60;b.vy+=uy*pull*1.3/60}}
+
+let dragging=false,grabbed=false,drag={x:0,y:0},stretch=0,angle=0;
+const GRAB_RADIUS_MULT=1.85;
+C.addEventListener('pointerdown',e=>{const dx=e.clientX-ex(),dy=e.clientY-ey();if(Math.hypot(dx,dy)<=EARTH_R*GRAB_RADIUS_MULT&&!state.paused){dragging=true;grabbed=true;drag.x=e.clientX;drag.y=e.clientY;stretch=0;angle=0}},{passive:true});
+C.addEventListener('pointermove',e=>{if(!dragging)return;drag.x=e.clientX;drag.y=e.clientY;const dx=drag.x-ex(),dy=drag.y-ey();stretch=Math.min(MAX_STRETCH,Math.hypot(dx,dy));angle=Math.atan2(dy,dx)},{passive:true});
+C.addEventListener('pointerup',()=>{if(!dragging)return;const eff=effectiveStretch(stretch);if(eff<=0){dragging=false;grabbed=false;stretch=0;return}fire(state.weapon,angle,eff);dragging=false;grabbed=false;stretch=0},{passive:true});
+
+document.addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k==='1')sel('kinetic');if(k==='2')sel('nuclear');if(k==='3')sel('tractor');if(k==='p')toggle();if(k==='m')edu()},{passive:true});
+UI.bar.addEventListener('click',e=>{const b=e.target.closest('button[data-weapon]');if(b)sel(b.dataset.weapon)});
+UI.pause.addEventListener('click',toggle);UI.edu.addEventListener('click',edu);UI.reset.addEventListener('click',()=>reset(false));
+
+function sel(w){state.weapon=w;[...UI.bar.querySelectorAll('.btn[data-weapon]')].forEach(b=>b.classList.toggle('active',b.dataset.weapon===w))}
+function toggle(){state.paused=!state.paused;UI.pause.textContent=state.paused?'Resume':'Pause'}
+function edu(){state.edu=!state.edu;UI.edu.classList.toggle('active',state.edu)}
+
+function tick(dt){
+  state.moonA+=(2*Math.PI/MOON_PERIOD_S)*dt;state.moonP=(state.moonA%(2*Math.PI))/(2*Math.PI);HUD.phase.textContent=state.moonP.toFixed(2);
+  const M=mPos();
+  for(const b of state.rocks){
+    if(!b.live)continue;
+    const e=aEarth(b),m=aMoon(b,M.x,M.y);step(b,e.ax+m.ax,e.ay+m.ay);
+    const d=Math.hypot(b.x-ex(),b.y-ey());if(d<EARTH_R+b.rpx*.7)hitEarth(b);
+    if(b.x<-800||b.x>innerWidth+800||b.y<-800||b.y>innerHeight+800){
+      const a=R(0,Math.PI*2),r=R(MOON_ORBIT_R*.9,MOON_ORBIT_R*2.1),v=SPEED_SCALE*(18+Math.random()*10);
+      b.x=ex()+Math.cos(a)*r;b.y=ey()+Math.sin(a)*r;b.vx=-Math.sin(a)*v;b.vy=Math.cos(a)*v;
+    }
+  }
+  for(const p of state.shots){
+    if(!p.live)continue;
+    const e=aEarth(p),Mp=mPos(),m=aMoon(p,Mp.x,Mp.y);
+    p.gElapsed+=dt;
+    const gPhase=CL(p.gElapsed/p.gDur,0,1);
+    const gScale=gPhase*gPhase; // smooth ramp-in of Earth's gravity
+    step(p,e.ax*gScale+m.ax,e.ay*gScale+m.ay);
+    p.life-=dt;if(p.life<=0)p.live=false;
+
+    for(const b of state.rocks){
+      if(!b.live)continue;
+      const d=Math.hypot(p.x-b.x,p.y-b.y);
+      if(d<p.r+b.rpx){
+        if(p.type==='kinetic')hitK(p,b); else if(p.type==='nuclear')hitN(p,b); else if(p.type==='tractor'){p.attach=b.id;log(`Tractor connected: ${b.name}`)}
+        break;
+      }
+    }
+    if(p.type==='tractor'){let near=null,cd=1e9;for(const b of state.rocks){if(!b.live||b.mat!=='metallic')continue;const d=Math.hypot(p.x-b.x,p.y-b.y);if(d<cd){cd=d;near=b}}if(near)pullTractor(p,near)}
+  }
+  state.shots=state.shots.filter(p=>p.live);
+  state.t-=dt;if(state.t<0)end(true);HUD.time.textContent=fmt(Math.max(0,state.t));
+}
+
+function fmt(s){const m=Math.floor(s/60),sc=Math.floor(s%60);return String(m).padStart(2,'0')+':'+String(sc).padStart(2,'0')}
+
+function draw(){
+  X.clearRect(0,0,innerWidth,innerHeight);
+  X.save();X.globalAlpha=.25;for(let i=0;i<60;i++){const x=(i*73)%innerWidth,y=(i*137)%innerHeight;X.fillStyle=i%9?'#9bb7ff':'#dfe7ff';X.fillRect(x,y,1,1)}X.restore();
+  if(IMG_E.complete&&IMG_E.naturalWidth>0)X.drawImage(IMG_E,ex()-EARTH_R,ey()-EARTH_R,EARTH_R*2,EARTH_R*2);else{X.fillStyle='#2a66d6';X.beginPath();X.arc(ex(),ey(),EARTH_R,0,Math.PI*2);X.fill()}
+  const M=mPos();if(IMG_M.complete&&IMG_M.naturalWidth>0)X.drawImage(IMG_M,M.x-MOON_R,M.y-MOON_R,MOON_R*2,MOON_R*2);else{X.fillStyle='#cfd6e6';X.beginPath();X.arc(M.x,M.y,MOON_R,0,Math.PI*2);X.fill()}
+  X.strokeStyle='rgba(140,170,255,.16)';X.beginPath();X.arc(ex(),ey(),MOON_ORBIT_R,0,Math.PI*2);X.stroke();
+
+  for(const b of state.rocks){
+    if(!b.live)continue;
+    if(IMG_A.complete&&IMG_A.naturalWidth>0)X.drawImage(IMG_A,b.x-b.rpx,b.y-b.rpx,b.rpx*2,b.rpx*2);
+    else{X.fillStyle=b.mat==='metallic'?'#b3b7c1':'#9aa3ad';X.beginPath();X.arc(b.x,b.y,b.rpx,0,Math.PI*2);X.fill()}
+    if(state.edu){X.strokeStyle='#5ee3ff';X.beginPath();X.moveTo(b.x,b.y);X.lineTo(b.x+b.vx*1.2,b.y+b.vy*1.2);X.stroke()}
+  }
+
+  for(const p of state.shots){
+    X.fillStyle=p.type==='kinetic'?'#ffe066':(p.type==='nuclear'?'#ff7b7b':'#7cffb8');
+    X.beginPath();X.arc(p.x,p.y,p.r,0,Math.PI*2);X.fill();
+    if(state.edu&&p.type!=='nuclear'){X.strokeStyle='rgba(255,255,255,.5)';X.beginPath();X.moveTo(p.x,p.y);X.lineTo(p.x+p.vx*1.2,p.y+p.vy*1.2);X.stroke()}
+  }
+
+  if(dragging&&grabbed){
+    const cx=ex(),cy=ey();
+    const dx=drag.x-cx,dy=drag.y-cy;
+    const ang=Math.atan2(dy,dx);
+    const ax1=ang+Math.PI/2,ax2=ang-Math.PI/2;
+    const r=EARTH_R*0.92;
+    const a1x=cx+Math.cos(ax1)*r,a1y=cy+Math.sin(ax1)*r;
+    const a2x=cx+Math.cos(ax2)*r,a2y=cy+Math.sin(ax2)*r;
+    X.strokeStyle='rgba(230,240,255,.9)';X.lineWidth=2;
+    X.beginPath();X.moveTo(a1x,a1y);X.lineTo(drag.x,drag.y);X.moveTo(a2x,a2y);X.lineTo(drag.x,drag.y);X.stroke();
+
+    const pct=Math.round(effectiveStretch(stretch)*100);
+    X.fillStyle='#eaf2ff';X.fillText(`Stretch: ${pct}%`,cx+12,cy-10);
+
+    if(state.edu){
+      const t=effectiveStretch(stretch);
+      const speed=V_MIN+(V_MAX-V_MIN)*easeOutCubic(t);
+      const pvx=-Math.cos(ang)*speed,pvy=-Math.sin(ang)*speed;
+      X.strokeStyle='rgba(255,255,255,.55)';X.beginPath();X.moveTo(cx,cy);X.lineTo(cx+pvx*1.4,cy+pvy*1.4);X.stroke();
+    }
+  }
+}
+
+let acc=0;function loop(){requestAnimationFrame(loop);if(state.paused){draw();return}acc+=1/60;while(acc>=1/60){tick(1/60);acc-=1/60}draw()}
+
+function end(win){state.paused=true;const msg=win?`Time up! Score ${state.score} — Earth HP ${state.hp}`:`Earth destroyed. Score ${state.score}`;log(msg);alert(msg)}
+function reset(paused=true){
+  state.t=180;state.score=0;state.hp=HP_MAX;state.paused=paused;state.weapon='kinetic';
+  state.ammo={nuclear:5,tractor:3};state.shots.length=0;spawn();
+  HUD.score.textContent=state.score;HUD.hp.textContent=state.hp;HUD.ammoN.textContent=state.ammo.nuclear;HUD.ammoT.textContent=state.ammo.tractor;HUD.log.innerHTML='';
+  [...UI.bar.querySelectorAll('.btn[data-weapon]')].forEach(b=>b.classList.toggle('active',b.dataset.weapon==='kinetic'));
+}
+
+UI.start.addEventListener('click',()=>{state.edu=false;UI.edu.classList.remove('active');UI.intro.style.display='none';state.paused=false},{passive:true});
+UI.startEdu.addEventListener('click',()=>{state.edu=true;UI.edu.classList.add('active');UI.intro.style.display='none';state.paused=false},{passive:true});
+
+spawn();reset(true);requestAnimationFrame(loop);
+</script>
+</body>
+</html>
