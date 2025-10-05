@@ -54,6 +54,25 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <a class="deflect" href="minijuego-defensores.html">🛡️ How could we avoid its impact?</a>
     <div id="impactBanner" class="banner">IMPACT</div>
   </div>
+<!-- Dentro de tu <style> existente, añade/actualiza esto -->
+<style>
+  #welcome .media{
+    width: min(606px, 92vw);
+    height: min(300px, 46vh);
+    aspect-ratio: 606 / 300;
+    margin: 10px 0 14px;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid #2a3f8a55;
+    background: #000;
+  }
+  #welcome .media video{
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* usa 'cover' si quieres que llene el marco recortando */
+  }
+</style>
 
   <aside class="panel" aria-live="polite">
     <h1>Simulator: Near-Earth Meteoroids</h1>
@@ -126,8 +145,16 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 <dialog id="welcome">
   <h2 style="margin:0 0 6px 0">Meteor Madness — Avenasa Team</h2>
   <figure class="media">
-    <img src="avenasa.jpg" alt="Avenasa Team — NASA Space Apps Challenge">
-  </figure>
+  <video
+    id="welcomeVideo"
+    src="avenasa.mp4"
+    playsinline
+    muted
+    controls
+    preload="metadata"
+    poster="earth.png"></video>
+</figure>
+
   <p>Welcome to Meteor Madness, an interactive experience developed by the Avenasa Team for the NASA Space Apps Challenge.</p>
   <p>This simulator lets you explore real near-Earth meteorites and see how close they travel to our planet. Each one moves through space around Earth, displaying its distance, velocity, and potential risk level.</p>
   <p>By selecting a meteor, you can discover its size, composition, and orbital details. For those who want to go further, a direct link connects you to the official NASA database with more scientific information.</p>
